@@ -151,10 +151,9 @@ class TCPPacket():
 
         # now if the sum exceeds 2^16, we have to handle the overflow
         while checksum > (2**16 -1):
-            checksum = (checksum & 0xFFFF) + (checksum >> 16) # 
+            checksum = (checksum & 0xFFFF) + (checksum >> 16)
 
-        #print(f"After overlap, sum is {checksum}")
-
+        # reverting the checksum
         final_checksum = ~checksum & 0xFFFF
         #print(f"final is {final_checksum}")
 
@@ -242,7 +241,6 @@ def ending_connection_robust(sender_socket, host_ip, target_ip, host_port, targe
 
     print("=== TENTATIVE ENVOI RST ===")
     try:
-        # Votre code RST existant
         sender_socket.sendto(rst_packet, (target_ip, 0))
         print("✅ RST envoyé avec succès")
         return True
@@ -250,14 +248,6 @@ def ending_connection_robust(sender_socket, host_ip, target_ip, host_port, targe
     except PermissionError as e:
         print(f"❌ RST bloqué par le système: {e}")
         print("   → Connexion fermée par timeout côté serveur")
-        
-        # Alternative: fermeture brutale du socket
-        try:
-            sender_socket.shutdown(socket.SHUT_RDWR)
-            print("✅ Socket fermé brutalement")
-        except Exception as e:
-            print("ERROR SHUTING_DOWN: ", e)
-        
         return False
     
     except Exception as e:
@@ -268,14 +258,14 @@ def	send_and_receive_packet(packet, sender_socket, receiver_socket, ip_header, t
     
     try:
         sender_socket.sendto(packet, (ip_header['target_ip'], 0))
-        print(f"SYN Packet send to {ip_header['target_ip']} from {tcp_header['target_port']} port",
-            f"from host {ip_header['host_ip']} from port {tcp_header['host_port']}")
+        # print(f"SYN Packet send to {ip_header['target_ip']} on {tcp_header['target_port']} port",
+        #     f"to host {ip_header['host_ip']} on port {tcp_header['host_port']}")
     except Exception as e:
         print(f"ERROR SENDING SYN PACKET: ", e)
 
     try:
         packet_received = receiver_socket.recv(1024)
-        print(f"Respond packet received ...")
+        # print(f"Respond packet received ...")
     except Exception as e:
         print(f"ERROR RECEIVING PACKET: ", e)
 
@@ -292,7 +282,7 @@ def check_response(sender_socket, host_ip, target_ip, host_port, target_port, re
         response_ip_header["host_ip"] != target_ip or
         response_tcp_header["target_port"] != host_port or
         response_tcp_header["host_port"] != target_port):
-        print("Received packet does not match expected source/destination")
+        # print("Received packet does not match expected source/destination") # we sometime get weird and unexpected packets
 
         return
 
@@ -312,5 +302,5 @@ def check_response(sender_socket, host_ip, target_ip, host_port, target_port, re
                                  response_sequence_number, 
                                  response_ack_number)
     else:
-        print(f"🔴 Port {target_port} on {target_ip} IPv4 address is CLOSED")
+        # print(f"🔴 Port {target_port} on {target_ip} IPv4 address is CLOSED")
         return

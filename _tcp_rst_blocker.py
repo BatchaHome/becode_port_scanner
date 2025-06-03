@@ -1,4 +1,9 @@
-# tcp_rst_blocker.py
+
+"""
+This script was ...
+
+
+"""
 
 import subprocess
 import platform
@@ -60,41 +65,43 @@ class TCPRSTBlocker:
         )
         return result.returncode == 0
         
+ 
     def _add_linux_rule(self):
         try:
-            print("➕ Ajout de la règle iptables pour bloquer les paquets RST sauf vers le port 5000...")
+            print("➕ Ajout de la règle iptables pour bloquer les paquets RST...")
 
-            # First, check if rule exists
-            result = subprocess.run(
-                ["sudo", "iptables", "-C", "OUTPUT",
-                "-p", "tcp", "--tcp-flags", "RST", "RST", "!", "--dport", "5000",
-                "-j", "DROP", "-m", "comment", "--comment", "BLOCK_RST_except_5000"],
-                capture_output=True, text=True
-            )
-
-            if result.returncode == 0:
-                print("ℹ️ Règle déjà présente. Pas besoin de la réajouter.")
+            if self._rule_exists():
+                # print("ℹ️ Règle déjà présente. Pas besoin de la réajouter.")
                 self.rule_added = True
                 return
 
-            # Add the rule
             cmd = [
                 "sudo", "iptables", "-I", "OUTPUT", "1",
-                "-p", "tcp", "--tcp-flags", "RST", "RST", "!",
-                "--dport", "5000", "-j", "DROP",
-                "-m", "comment", "--comment", "BLOCK_RST_except_5000"
+                "-p", "tcp",
+                "--tcp-flags", "RST", "RST",
+                "-j", "DROP",
+                "-m", "comment", "--comment", "BLOCK_RST"
             ]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
-            print("📤 stdout:", result.stdout.strip())
-            print("⚠️ stderr:", result.stderr.strip())
+            # print("📤 stdout:", result.stdout.strip())
+            # print("⚠️ stderr:", result.stderr.strip())
 
             if result.returncode != 0:
                 print("❌ Échec de l'ajout de la règle.")
                 return
 
-            print("✅ Règle ajoutée avec succès.")
-            self.rule_added = True
+            # print("✅ Règle ajoutée. Vérification dans iptables...")
+            verify_cmd = ["sudo", "iptables", "-L", "OUTPUT", "-n", "--line-numbers"]
+            verify_result = subprocess.run(verify_cmd, capture_output=True, text=True)
+            # print("📜 iptables OUTPUT:")
+            # print(verify_result.stdout)
+
+            if "BLOCK_RST" in verify_result.stdout:
+                # print("✅ Règle confirmée : 'BLOCK_RST' active.")
+                self.rule_added = True
+            else:
+                print("⚠️ Règle NON trouvée. Elle n'est peut-être pas active.")
 
         except subprocess.CalledProcessError as e:
             print(f"❌ Erreur lors de l'exécution de iptables : {e}")
@@ -103,89 +110,25 @@ class TCPRSTBlocker:
 
     def _remove_linux_rule(self):
         try:
-            print("🧹 Suppression de la règle iptables...")
+            # print("🧹 Suppression de la règle iptables...")
 
             cmd = [
                 "sudo", "iptables", "-D", "OUTPUT",
-                "-p", "tcp", "--tcp-flags", "RST", "RST", "!",
-                "--dport", "5000", "-j", "DROP",
-                "-m", "comment", "--comment", "BLOCK_RST_except_5000"
+                "-p", "tcp", "--tcp-flags", "RST", "RST",
+                "-j", "DROP", "-m", "comment", "--comment", "BLOCK_RST"
             ]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
-            print("📤 stdout:", result.stdout.strip())
-            print("⚠️ stderr:", result.stderr.strip())
+            # print("📤 stdout:", result.stdout.strip())
+            # print("⚠️ stderr:", result.stderr.strip())
 
             if result.returncode == 0:
-                print("✅ Règle supprimée avec succès")
+                # print("✅ Règle supprimée avec succès")
                 self.rule_added = False
             else:
                 print("⚠️ La règle n’a pas été supprimée. Peut-être déjà absente.")
         except Exception as e:
             print(f"❌ Erreur lors de la suppression : {e}")
-    # def _add_linux_rule(self):
-    #     try:
-    #         print("➕ Ajout de la règle iptables pour bloquer les paquets RST...")
-
-    #         if self._rule_exists():
-    #             print("ℹ️ Règle déjà présente. Pas besoin de la réajouter.")
-    #             self.rule_added = True
-    #             return
-
-        #     cmd = [
-        #         "sudo", "iptables", "-I", "OUTPUT", "1",
-        #         "-p", "tcp",
-        #         "--tcp-flags", "RST", "RST",
-        #         "-j", "DROP",
-        #         "-m", "comment", "--comment", "BLOCK_RST"
-        #     ]
-
-        #     result = subprocess.run(cmd, capture_output=True, text=True)
-        #     print("📤 stdout:", result.stdout.strip())
-        #     print("⚠️ stderr:", result.stderr.strip())
-
-        #     if result.returncode != 0:
-        #         print("❌ Échec de l'ajout de la règle.")
-        #         return
-
-        #     print("✅ Règle ajoutée. Vérification dans iptables...")
-        #     verify_cmd = ["sudo", "iptables", "-L", "OUTPUT", "-n", "--line-numbers"]
-        #     verify_result = subprocess.run(verify_cmd, capture_output=True, text=True)
-        #     print("📜 iptables OUTPUT:")
-        #     print(verify_result.stdout)
-
-        #     if "BLOCK_RST" in verify_result.stdout:
-        #         print("✅ Règle confirmée : 'BLOCK_RST' active.")
-        #         self.rule_added = True
-        #     else:
-        #         print("⚠️ Règle NON trouvée. Elle n'est peut-être pas active.")
-
-        # except subprocess.CalledProcessError as e:
-        #     print(f"❌ Erreur lors de l'exécution de iptables : {e}")
-        #     if e.stderr:
-        #         print(f"🧨 Détail de l'erreur : {e.stderr.strip()}")
-
-    # def _remove_linux_rule(self):
-    #     try:
-    #         print("🧹 Suppression de la règle iptables...")
-
-    #         cmd = [
-    #             "sudo", "iptables", "-D", "OUTPUT",
-    #             "-p", "tcp", "--tcp-flags", "RST", "RST",
-    #             "-j", "DROP", "-m", "comment", "--comment", "BLOCK_RST"
-    #         ]
-
-    #         result = subprocess.run(cmd, capture_output=True, text=True)
-    #         print("📤 stdout:", result.stdout.strip())
-    #         print("⚠️ stderr:", result.stderr.strip())
-
-    #         if result.returncode == 0:
-    #             print("✅ Règle supprimée avec succès")
-    #             self.rule_added = False
-    #         else:
-    #             print("⚠️ La règle n’a pas été supprimée. Peut-être déjà absente.")
-    #     except Exception as e:
-    #         print(f"❌ Erreur lors de la suppression : {e}")
 
     def _add_macos_rule(self):
         pass  # Conservé tel quel, non modifié ici
@@ -218,22 +161,21 @@ class TCPRSTBlocker:
         return True
 
 def test_blocker():
-    print("🧪 Test du TCP RST Blocker...")
 
     blocker = TCPRSTBlocker()
 
     try:
         success = blocker.add_rule()
         if success:
-            print("✅ Règle ajoutée avec succès")
-            if blocker.test_rule():
-                print("✅ Règle fonctionnelle")
-            else:
-                print("⚠️ La règle pourrait ne pas fonctionner correctement")
+            # print("✅ Règle ajoutée avec succès")
+            # if blocker.test_rule():
+                # print("✅ Règle fonctionnelle")
+            # else:
+                # print("⚠️ La règle pourrait ne pas fonctionner correctement")
 
             time.sleep(2)
             blocker.remove_rule()
-            print("✅ Test terminé")
+            # print("✅ Test terminé")
         else:
             print("❌ Échec de l'ajout de la règle")
     except KeyboardInterrupt:

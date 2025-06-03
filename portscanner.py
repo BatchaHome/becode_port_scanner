@@ -1,45 +1,34 @@
 import socket
-import threading
 import ipaddress
 import random
 import time
-from queue import Queue
 
 from _tcppacket import TCPPacket, get_ip_header, get_tcp_header, check_response, ending_connection_robust, send_and_receive_packet, print_packet
 from _tcp_rst_blocker import TCPRSTBlocker
 
 class PortScanner:
-    def __init__(self, host_ip, target_ip, thread_count=10):
-        self.host_ip = host_ip
-        self.target_ip = target_ip
-        self.thread_count = thread_count
-        
-        # Threading helpers
-        self.queue = Queue()
-        self.lock = threading.Lock()
-        
-        # Setup firewall rule to block outgoing RST packets
+    def __init__(self, host_ip, target_ip):
+
+        # IP validity checking using ipaddress library
         try:
-            self.tcp_rst_blocker = TCPRSTBlocker()
-            self.tcp_rst_blocker.add_rule()
-            time.sleep(1)  # Give the rule some time to apply
-        
-        except PermissionError:
-            print("❌ Error: Raw sockets require administrative privileges.")
-            raise
-        
-        except Exception as e:
-            print(f"❌ Firewall rule setup failed: {e}")
-            raise
+            host_ipobj = ipaddress.ip_address(host_ip)
+            target_ipobj = ipaddress.ip_address(target_ip)
+            self.host_ip = str(host_ipobj)
+            self.target_ip = str(target_ipobj)
+        except ValueError:
+            print(f"❌ Invalid IP address: {ip}")
+            return   
 
-    def _worker(self):
-        while not self.queue.empty():
-            target_port = self.queue.get()
+    def scan_ports(self, ports):
 
+        for target_port in ports:
+            if target_port == 0:
+                continue
             try:
-                # Create sockets locally in the thread
+                # Create sockets
                 sender_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
                 sender_socket.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+
                 receiver_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
                 # Random source port
                 host_port = random.randint(1024, 65535)
@@ -47,41 +36,22 @@ class PortScanner:
                 syn_packet = syn_packet_obj.get_packet()
                 
                 ip_header = get_ip_header(syn_packet)
-                print("test")
                 tcp_header = get_tcp_header(syn_packet, ip_header)
 
-                with self.lock:
-                    print(f"Scanning port {target_port} on {self.target_ip}")
+                #print(f"Scanning port {target_port} on {self.target_ip}")
 
                 response_packet = send_and_receive_packet(syn_packet, sender_socket, receiver_socket, ip_header, tcp_header)
                 
-                with self.lock:
-                    check_response(sender_socket, self.host_ip, self.target_ip, host_port, target_port, response_packet)
-
+                check_response(sender_socket, self.host_ip, self.target_ip, host_port, target_port, response_packet)
+            except PermissionError:
+                print("❌ Error: Raw sockets require administrative privileges.")
+                return
             except Exception as e:
-                with self.lock:
-                    print(f"⚠️ Error scanning port {target_port}: {e}")
+                print(f"⚠️ Error scanning port {target_port}: {e}")
+                return
             finally:
                 sender_socket.close()
                 receiver_socket.close()
-                self.queue.task_done()
-
-    def scan_ports(self, ports):
-        # Fill queue
-        for port in ports:
-            self.queue.put(port)
-
-        threads = []
-        for _ in range(min(self.thread_count, self.queue.qsize())):
-            t = threading.Thread(target=self._worker)
-            t.start()
-            threads.append(t)
-
-        # Wait for all to finish
-        self.queue.join()
-
-        for t in threads:
-            t.join()
 
     def close(self):
         try:
@@ -91,13 +61,19 @@ class PortScanner:
             print(f"Error cleaning up firewall rule: {e}")
             
 
+def get_host_ip():
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
 
 if __name__ == "__main__":
-    
-    host_ip = "10.40.35.124"
-    target_ip = "10.40.37.177"
+
+    host_ip = get_host_ip()
+    # target_ip = "10.40.37.176"
+    target_ip = input("Insert ip address to scan : ")
 
     port_scanner = PortScanner(host_ip, target_ip)
-    ports = [80, 5000, 433, 24]
+    ports = [port for port in range(1, 5500)]
+    port = [5000]
 
     port_scanner.scan_ports(ports)
